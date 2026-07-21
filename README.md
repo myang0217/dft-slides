@@ -1,10 +1,10 @@
 # 十页读懂 DFT
 
-一份用 [reveal.js](https://revealjs.com) 做的**手机竖版**幻灯片,10 页讲清密度泛函理论的主线逻辑。
+一份用 [reveal.js](https://revealjs.com) 做的幻灯片,10 页讲清密度泛函理论的主线逻辑。
 
 **在线观看:** https://myang0217.github.io/dft-slides/
 
-画布是 iPhone 16 Pro 的逻辑分辨率 402 × 874。电脑上打开会看到幻灯片装在一台 iPhone 里,手机上打开则直接铺满全屏。
+横版画布 1280 × 720(投影仪比例),内容以两栏为主。
 
 ## 内容主线
 
@@ -25,18 +25,16 @@
 
 ## 技术要点
 
-幻灯片装在一个固定尺寸的 `.phone` 容器里,因此**必须**开启 `embedded`:
+画布尺寸就是配置里的两个数字:
 
 ```js
 Reveal.initialize({
-  embedded: true,   // 不开的话 reveal 会把 <body> 当 viewport,
-                    // 按窗口尺寸缩放,内容被容器裁掉
-  width:  402,      // iPhone 16 Pro 逻辑分辨率
-  height: 874,
+  width:  1280,   // 16:9 投影仪比例
+  height: 720,
 });
 ```
 
-公式由 KaTeX 插件渲染,窄画布下统一缩到 `0.7em` 并允许横向滚动,不会撑破版面。
+公式由 KaTeX 插件渲染,直接在正文里写 `$...$` / `$$...$$`。
 
 ## 用法
 
