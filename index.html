@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>十页读懂 DFT</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+
+  <style>
+    /* ---------- 竖版画布:iPhone 16 Pro 逻辑分辨率 402 × 874 ---------- */
+    :root {
+      --r-main-font-size: 21px;
+      --r-heading1-size: 1.55em;
+      --r-heading2-size: 1.22em;
+      --r-heading3-size: 1.04em;
+      --r-heading-line-height: 1.25;
+      --accent: #4338ca;
+      --accent2: #0d9488;
+      --muted: #6b7280;
+    }
+
+    html, body { height: 100%; margin: 0; }
+
+    /* 幻灯片装在 .phone 容器里,必须配合 JS 的 embedded:true —— 否则 reveal 会把
+       <body> 当 viewport,按窗口尺寸缩放,内容被容器 overflow:hidden 裁掉。 */
+    html, body {
+      background: radial-gradient(ellipse at 50% 0%, #26262b 0%, #131316 70%);
+    }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+
+    body > .phone {
+      position: relative;
+      --h: min(874px, 90vh);
+      height: var(--h);
+      width: calc(var(--h) * 402 / 874);
+      border-radius: calc(var(--h) * 0.062);
+      overflow: hidden;
+      background: #fff;
+      box-shadow:
+        0 0 0 9px #303034,
+        0 0 0 11px #78787e,
+        0 22px 55px rgba(0, 0, 0, 0.6);
+    }
+
+    .island {
+      position: absolute; z-index: 40;
+      top: calc(var(--h) * 0.014); left: 50%; transform: translateX(-50%);
+      width: calc(var(--h) * 0.13); height: calc(var(--h) * 0.037);
+      background: #000; border-radius: 999px; pointer-events: none;
+      opacity: 0.88;
+    }
+    .home-bar {
+      position: absolute; z-index: 40;
+      bottom: calc(var(--h) * 0.009); left: 50%; transform: translateX(-50%);
+      width: 34%; height: 4px; border-radius: 999px;
+      background: rgba(0, 0, 0, 0.32); pointer-events: none;
+      mix-blend-mode: difference;
+    }
+
+    @media (max-width: 620px), (max-height: 560px) {
+      body { display: block; }
+      body > .phone {
+        --h: 100vh;
+        width: 100vw; height: 100vh; height: 100dvh;
+        border-radius: 0; box-shadow: none;
+      }
+      .island, .home-bar { display: none; }
+    }
+
+    /* ---------- 竖版排版 ---------- */
+    .reveal {
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",
+                   "Source Han Sans SC", "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      /* embedded 下 .reveal-viewport(line-height:1)落在本元素上,显式压回来 */
+      line-height: 1.45;
+    }
+    .reveal h1, .reveal h2, .reveal h3 { font-weight: 600; letter-spacing: 0.01em; margin-bottom: 0.5em; }
+    .reveal h2 { color: #1f2937; }
+    .reveal section { text-align: left; }
+    .reveal section.center { text-align: center; }
+    .reveal p { line-height: 1.5; margin: 0.5em 0; }
+    .reveal ul, .reveal ol { display: block; margin-left: 1.05em; }
+    .reveal li { margin-bottom: 0.4em; line-height: 1.45; }
+    .reveal .subtitle { color: var(--muted); font-size: 0.72em; line-height: 1.5; }
+    .reveal .dark-bg, .reveal .dark-bg h1, .reveal .dark-bg h2, .reveal .dark-bg h3, .reveal .dark-bg p { color: #fff; }
+    .reveal .slides section { padding-top: 1.4em; }
+
+    .reveal code { font-family: "SF Mono", Menlo, Consolas, monospace; }
+    .reveal pre { width: 100%; box-shadow: none; margin: 0.6em 0; font-size: 13px; line-height: 1.42; }
+    .reveal pre code { padding: 0.85em 0.9em; border-radius: 9px; max-height: 360px; }
+
+    .reveal .box {
+      border: 1px solid #e3e6ea; border-radius: 10px; padding: 0.6em 0.75em;
+      background: #fafbfc; font-size: 0.8em; line-height: 1.5;
+    }
+    .reveal .box.accent { border-color: #c7d2fe; background: #eef2ff; }
+    .reveal .box.warn   { border-color: #fde68a; background: #fffbeb; }
+    .reveal .tag {
+      display: inline-block; background: var(--accent); color: #fff;
+      border-radius: 5px; padding: 1px 7px; font-size: 0.68em; vertical-align: middle;
+    }
+    .reveal .tag.t2 { background: var(--accent2); }
+    .reveal table { font-size: 0.66em; width: 100%; }
+    .reveal table th, .reveal table td { padding: 0.3em 0.35em; }
+    .reveal .big-num { font-size: 1.9em; color: var(--accent); font-weight: 700; }
+    .reveal em { color: var(--accent); font-style: normal; font-weight: 600; }
+
+    /* 窄画布里的公式:缩小并允许横向滚动,绝不撑破版面 */
+    .reveal .katex-display { font-size: 0.7em; margin: 0.5em 0; overflow-x: auto; overflow-y: hidden; }
+    .reveal .katex { font-size: 1em; }
+
+    /* SCF 循环示意 */
+    .reveal .cycle { font-size: 0.76em; line-height: 1.7; }
+    .reveal .cycle b { color: var(--accent); }
+    .reveal .ladder li { margin-bottom: 0.3em; font-size: 0.88em; }
+
+    .reveal .hint {
+      position: absolute; z-index: 35;
+      bottom: 20px; left: 0; right: 0; text-align: center;
+      font-size: 11px; color: var(--muted); opacity: 0.8;
+    }
+    .reveal .progress { height: 3px; color: var(--accent); }
+    .reveal .slide-number { font-size: 11px; bottom: 16px; right: 10px; background: none; color: var(--muted); }
+
+    /* 导出 PDF:?print-pdf 下 reveal 给 <html> 加 .reveal-print 并重排分页,须脱掉外壳 */
+    html.reveal-print body { display: block; background: #fff; }
+    html.reveal-print body > .phone {
+      width: 100% !important; height: auto !important;
+      border-radius: 0; box-shadow: none; overflow: visible;
+    }
+    html.reveal-print .island,
+    html.reveal-print .home-bar,
+    html.reveal-print .hint { display: none; }
+
+    @media print {
+      .hint, .island, .home-bar { display: none; }
+      body { display: block; background: #fff; }
+      body > .phone { width: 100%; height: auto; border-radius: 0; box-shadow: none; overflow: visible; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="phone">
+  <div class="island"></div>
+
+  <div class="reveal">
+  <div class="slides">
+
+    <!-- ============ 1 封面 ============ -->
+    <section class="center" data-background-gradient="linear-gradient(160deg, #1e1b4b 0%, #4338ca 55%, #0d9488 100%)">
+      <div class="dark-bg">
+        <h1>十页读懂<br>密度泛函理论</h1>
+        <p class="subtitle" style="color:#c7d2fe; margin-top:1.1em">
+          Density Functional Theory<br>
+          —— 为什么它能算材料
+        </p>
+        <p class="subtitle" style="color:#a5b4fc; margin-top:1.6em; font-size:0.62em">
+          向上滑动开始
+        </p>
+      </div>
+      <aside class="notes">面向刚接触 DFT 的物理/化学/材料背景听众。</aside>
+    </section>
+
+    <!-- ============ 2 问题 ============ -->
+    <section>
+      <h2>问题:方程写得出,<br>却算不动</h2>
+      <p>固体里的电子,原则上只需解:</p>
+      <p>$$\hat{H}\,\Psi(\mathbf{r}_1,\mathbf{r}_2,\dots,\mathbf{r}_N) = E\,\Psi$$</p>
+      <p>但波函数 $\Psi$ 依赖 <em>全部 N 个电子</em> 的坐标 —— 这是一个 $3N$ 维函数。</p>
+      <div class="box warn fragment">
+        每维取 10 个网格点,$N=100$ 个电子就要存 $10^{300}$ 个数
+        —— 超过可观测宇宙的原子总数。
+        <br><span style="color:var(--muted)">Kohn 称之为「指数墙」。</span>
+      </div>
+      <aside class="notes">强调:难的不是写方程,是维数灾难。</aside>
+    </section>
+
+    <!-- ============ 3 HK 定理 ============ -->
+    <section>
+      <h2>转折:<br>用密度代替波函数</h2>
+      <p><strong>Hohenberg–Kohn 定理 (1964)</strong></p>
+      <p>基态电子密度 $n(\mathbf{r})$ <em>唯一决定</em> 外势,从而决定哈密顿量:</p>
+      <p>$$n(\mathbf{r}) \;\Longrightarrow\; V_{\text{ext}} \;\Longrightarrow\; \hat{H}$$</p>
+      <p style="font-size:0.86em">于是<strong>一切基态性质</strong>都是密度的泛函。</p>
+      <div class="box accent fragment">
+        <strong>维数从 $3N$ 塌缩到 $3$。</strong><br>
+        无论 10 个电子还是 $10^{23}$ 个,要找的都只是一个三维函数 $n(x,y,z)$。
+      </div>
+      <p class="subtitle fragment">第二定理:真实基态密度使能量泛函 $E[n]$ 取极小 —— 于是可以变分求解。</p>
+    </section>
+
+    <!-- ============ 4 KS 映射 ============ -->
+    <section>
+      <h2>Kohn–Sham 的<br>偷天换日</h2>
+      <p>难点在于动能泛函 $T[n]$ 写不出来。1965 年 Kohn 与 Sham 给出办法:</p>
+      <div class="box accent">
+        构造一套 <em>互不相互作用</em> 的虚拟电子,让它们的密度<strong>恰好等于</strong>真实体系的密度。
+      </div>
+      <p style="margin-top:0.7em">能量拆成四项:</p>
+      <p>$$E[n] = T_s[n] + E_{\text{H}}[n] + E_{\text{ext}}[n] + E_{\text{xc}}[n]$$</p>
+      <p class="subtitle">前三项都能精确写出。所有不知道的东西 —— 交换、关联、以及真实动能与 $T_s$ 的差 —— 全部扫进最后一项 $E_{\text{xc}}$。</p>
+    </section>
+
+    <!-- ============ 5 KS 方程 + SCF ============ -->
+    <section>
+      <h2>要解的方程<br>与自洽循环</h2>
+      <p>单电子方程(原子单位):</p>
+      <p>$$\left[-\tfrac{1}{2}\nabla^2 + V_{\text{eff}}(\mathbf{r})\right]\psi_i = \varepsilon_i\,\psi_i$$</p>
+      <p style="font-size:0.86em">其中 $V_{\text{eff}} = V_{\text{ext}} + V_{\text{H}}[n] + V_{\text{xc}}[n]$,而
+         $n(\mathbf{r}) = \sum_i^{\text{occ}} \lvert\psi_i(\mathbf{r})\rvert^2$。</p>
+      <div class="box cycle fragment">
+        势依赖密度,密度又来自解方程 → <b>必须自洽 (SCF)</b><br><br>
+        猜一个 $n$ → 建 $V_{\text{eff}}$ → 解本征方程 → 得新 $n$ → 混合 → 重复,直到不再变化
+      </div>
+      <aside class="notes">SCF 不收敛是日常,混合方案、初始猜测、展宽都可能是原因。</aside>
+    </section>
+
+    <!-- ============ 6 泛函 ============ -->
+    <section>
+      <h2>唯一的近似:<br>交换关联泛函</h2>
+      <p>到这一步理论仍是<em>严格</em>的。真正的近似只有一个 —— $E_{\text{xc}}$ 长什么样。</p>
+      <ul class="ladder">
+        <li><span class="tag">LDA</span> 只用局域密度 $n(\mathbf{r})$</li>
+        <li><span class="tag">GGA</span> 加梯度 $\nabla n$ — PBE 最常用</li>
+        <li><span class="tag">meta-GGA</span> 再加动能密度 $\tau$ — SCAN、r²SCAN</li>
+        <li><span class="tag t2">杂化</span> 掺入精确交换 — HSE06、PBE0</li>
+      </ul>
+      <div class="box fragment">
+        Perdew 把它们排成通往化学精度的<strong>雅各布天梯</strong>:越往上越准,也越贵。
+        <br><span style="color:var(--muted)">没有普适最优泛函,选择依体系而定。</span>
+      </div>
+    </section>
+
+    <!-- ============ 7 落地 ============ -->
+    <section>
+      <h2>实际怎么算</h2>
+      <p style="font-size:0.9em">把方程投影到有限基组上,变成矩阵本征值问题:</p>
+      <table>
+        <thead><tr><th>路线</th><th>做法</th><th>代表</th></tr></thead>
+        <tbody>
+          <tr><td>赝势 + 平面波</td><td>冻住芯电子</td><td>QE、VASP</td></tr>
+          <tr><td>全电子 LAPW</td><td>球内球外分区</td><td>exciting、FLEUR</td></tr>
+          <tr><td>局域轨道</td><td>原子轨道基</td><td>SIESTA、FHI-aims</td></tr>
+        </tbody>
+      </table>
+      <p class="subtitle" style="margin-top:0.7em">周期体系还需在布里渊区取 <em>k 点</em> 采样。截断能、k 网格、展宽都必须做收敛测试 —— 不测就没有可信数字。</p>
+    </section>
+
+    <!-- ============ 8 能算什么 ============ -->
+    <section data-background-color="#111827">
+      <div class="dark-bg">
+        <h2>它能给你什么</h2>
+        <ul style="font-size:0.88em">
+          <li>晶格常数、弹性常数、形成能</li>
+          <li>能带结构、态密度、费米面</li>
+          <li>声子谱、电声耦合、超导 $T_c$</li>
+          <li>磁性、极化、拓扑不变量</li>
+          <li>缺陷、表面、吸附与反应路径</li>
+        </ul>
+        <div class="box accent fragment" style="background:#1f2937; border-color:#374151; color:#e5e7eb">
+          再往上还有 <strong>TDDFT</strong>(激发态、光谱)、
+          <strong>GW/BSE</strong>(准粒子与激子)—— 多以 DFT 结果为起点。
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 9 局限 ============ -->
+    <section>
+      <h2>必须知道的坑</h2>
+      <ul style="font-size:0.86em">
+        <li><strong>带隙低估</strong> — KS 本征值本非准粒子能量,半导体常低估 30–50%,需 GW 或杂化泛函</li>
+        <li><strong>范德华缺失</strong> — 标准泛函无长程色散,层状/分子晶体要加 DFT-D3、vdW-DF</li>
+        <li><strong>强关联失效</strong> — 3d/4f 局域电子,需 DFT+U、DMFT</li>
+        <li><strong>自相互作用误差</strong> — 电子被自己的库仑势推开,过度离域</li>
+      </ul>
+      <div class="box warn fragment">
+        标准 DFT 给的是 <strong>0 K 基态</strong>。有限温度、无序、量子核效应都要额外处理。
+      </div>
+    </section>
+
+    <!-- ============ 10 结尾 ============ -->
+    <section class="center" data-background-gradient="linear-gradient(160deg, #1e1b4b 0%, #4338ca 55%, #0d9488 100%)">
+      <div class="dark-bg">
+        <h2>一句话</h2>
+        <p style="font-size:0.86em; line-height:1.65">
+          DFT 把<br>「解 $3N$ 维波函数」<br>换成了<br>「求一个三维密度」,<br>
+          代价是把全部未知<br>压进 $E_{\text{xc}}$ 这一项。
+        </p>
+        <p class="subtitle" style="color:#c7d2fe; margin-top:1.3em; font-size:0.66em">
+          Kohn 因此获 1998 年诺贝尔化学奖<br>
+          今天它是材料计算的默认起点
+        </p>
+      </div>
+      <aside class="notes">收尾:强调 DFT 是起点而非终点。</aside>
+    </section>
+
+  </div>
+
+  <div class="hint">滑动 / 空格翻页 · <b>Esc</b> 鸟瞰 · <b>S</b> 备注 · <b>?</b> 快捷键</div>
+  </div>
+
+  <div class="home-bar"></div>
+</div>
+
+<script type="module">
+  import Reveal from 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.esm.js';
+  import Highlight from 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.esm.js';
+  import Notes from 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.esm.js';
+  import Math from 'https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/math/math.esm.js';
+
+  Reveal.initialize({
+    // 幻灯片装在 .phone 容器里而不是整个页面,必须开 embedded
+    embedded: true,
+
+    // iPhone 16 Pro 竖版逻辑分辨率
+    width: 402,
+    height: 874,
+    margin: 0.05,
+    minScale: 0.2,
+    maxScale: 2.0,
+
+    hash: true,
+    center: false,
+    transition: 'slide',
+    slideNumber: 'c/t',
+    controls: true,
+    controlsLayout: 'edges',
+
+    plugins: [Highlight, Notes, Math.KaTeX],
+    katex: {
+      version: '0.16.11',
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false }
+      ]
+    }
+  });
+</script>
+</body>
+</html>
